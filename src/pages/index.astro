@@ -1,3 +1,14 @@
+---
+import catalog from '../data/gunpla.json';
+import { listImages } from '../lib/database';
+
+const imageRecords = await listImages().catch(() => []);
+const altTextById = new Map(imageRecords.map((record) => [record.gunpla_id, record.alt_text]));
+const gunplaDatabase = catalog.map((item) => ({
+    ...item,
+    imageAlt: altTextById.get(item.id) || `${item.name} Master Grade model kit`,
+}));
+---
 <!DOCTYPE html>
 <html lang="en" class="scroll-smooth dark">
 <head>
@@ -59,14 +70,15 @@
                     <i class="fa-solid fa-robot text-xl"></i>
                 </div>
                 <div>
-                    <span class="text-xs font-mono uppercase tracking-widest text-cyber-cyan font-semibold block">Astro Static Build</span>
+                    <span class="text-xs font-mono uppercase tracking-widest text-cyber-cyan font-semibold block">Astro Web Service</span>
                     <span class="text-lg sm:text-xl font-extrabold tracking-tight text-white">OPERATION: METEOR MG ARCHIVE</span>
                 </div>
             </div>
             <div class="hidden md:flex items-center space-x-6 text-sm font-medium text-gray-300">
                 <span class="flex items-center gap-1.5"><i class="fa-solid fa-cube text-cyber-cyan"></i> Scale: 1/100</span>
                 <span class="flex items-center gap-1.5"><i class="fa-solid fa-shield-halved text-cyber-amber"></i> Total Kits: 30</span>
-                <span class="px-3 py-1 bg-cyber-cyan/10 text-cyber-cyan border border-cyber-cyan/30 rounded-full font-mono text-xs">Astro SSG Output</span>
+                <span class="px-3 py-1 bg-cyber-cyan/10 text-cyber-cyan border border-cyber-cyan/30 rounded-full font-mono text-xs">Astro SSR + S3</span>
+                <a href="/admin" class="text-xs font-mono text-gray-400 hover:text-cyber-cyan" rel="nofollow"><i class="fa-solid fa-lock mr-1"></i> Admin</a>
             </div>
         </div>
     </header>
@@ -180,6 +192,10 @@
                 </button>
             </div>
             <div class="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+                <div class="relative aspect-video overflow-hidden rounded-xl border border-gray-700 bg-mecha-900">
+                    <span class="absolute inset-0 grid place-items-center text-sm font-mono text-gray-600">No catalog image</span>
+                    <img id="modalImage" src="" alt="" class="relative h-full w-full object-cover" onerror="this.hidden=true">
+                </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="bg-mecha-900 p-4 rounded-xl border border-gray-700/50">
                         <span class="text-xs font-mono text-gray-400 block mb-1">PILOT / AFFILIATION</span>
@@ -211,204 +227,26 @@
     <footer class="bg-mecha-800 border-t border-gray-800 py-8 text-center text-xs text-gray-400 mt-16 font-mono">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-2">
             <p>MOBILE SUIT GUNDAM WING • MASTER GRADE (MG) ARCHIVE DATABASE &copy; 2026</p>
-            <p class="text-gray-500">Astro Static Site Generation Architecture. All Gunpla models and trademarks belong to Bandai Spirits & Sunrise.</p>
+            <p class="text-gray-500">Astro server-rendered architecture with private object storage. All Gunpla models and trademarks belong to Bandai Spirits & Sunrise.</p>
         </div>
     </footer>
 
-    <!-- Application Logic & Dataset -->
-    <script is:inline>
+    <!-- Application Logic; catalog data is supplied from src/data/gunpla.json -->
+    <script is:inline define:vars={{ gunplaDatabase }}>
         /* 
           Astro Page Script: Complete Dataset of 30 Gundam Wing Master Grade (MG) Kits
           Includes both common retail releases and premium P-Bandai / limited editions.
         */
-        const gunplaDatabase = [
-            // --- RETAIL RELEASES (18 Kits) ---
-            {
-                id: 'mg-01', name: 'XXXG-01W Wing Gundam', series: 'TV Version', type: 'Retail', faction: 'Operation Meteor',
-                pilot: 'Heero Yuy', release: '2004', price: '¥3,800', scale: '1/100',
-                lore: 'The classic Earth-bound transforming mobile suit designed by Dr. J. Capable of transforming into Bird Mode.',
-                armament: 'Buster Rifle, Beam Sabers, Machine Cannons, Shield with Beam Saber.'
-            },
-            {
-                id: 'mg-02', name: 'XXXG-01W Wing Gundam Zero (EW)', series: 'Endless Waltz', type: 'Retail', faction: 'Operation Meteor',
-                pilot: 'Heero Yuy', release: '2004', price: '¥4,500', scale: '1/100',
-                lore: 'Iconic angel-winged mobile suit featuring twin buster rifles and Zero System psychological combat interface.',
-                armament: 'Twin Buster Rifle, Machine Cannons, Wing Binder Shield.'
-            },
-            {
-                id: 'mg-03', name: 'XXXG-01D Gundam Deathscythe (EW)', series: 'Endless Waltz', type: 'Retail', faction: 'Operation Meteor',
-                pilot: 'Duo Maxwell', release: '2008', price: '¥3,800', scale: '1/100',
-                lore: 'Stealth-oriented close-combat mobile suit equipped with hyper jammer jammers and active camouflage.',
-                armament: 'Beam Scythe, Buster Shield, Vulcan Guns.'
-            },
-            {
-                id: 'mg-04', name: 'XXXG-01H Gundam Heavyarms (EW)', series: 'Endless Waltz', type: 'Retail', faction: 'Operation Meteor',
-                pilot: 'Trowa Barton', release: '2012', price: 'Full Armor • ¥4,000', scale: '1/100',
-                lore: 'Walking armory packed with vulcan guns, missile pods, and chest gatling guns for overwhelming barrage firepower.',
-                armament: 'Chest Gatling Guns, Beam Gatling, Homing Missiles, Army Knife.'
-            },
-            {
-                id: 'mg-05', name: 'XXXG-01S Gundam Sandrock (EW)', series: 'Endless Waltz', type: 'Retail', faction: 'Operation Meteor',
-                pilot: 'Quatre Raberba Winner', release: '2013', price: '¥4,000', scale: '1/100',
-                lore: 'Command-type mobile suit designed for desert combat and melee skirmishes, featuring heat shotels.',
-                armament: 'Heat Shotels, Shield, Beam Machine Gun.'
-            },
-            {
-                id: 'mg-06', name: 'XXXG-01SR Gundam Shenlong (EW)', series: 'Endless Waltz', type: 'Retail', faction: 'Operation Meteor',
-                pilot: 'Chang Wufei', release: '2011', price: '¥3,800', scale: '1/100',
-                lore: 'Martial arts inspired mobile suit featuring an extendable dragon fang arm and beam glaive.',
-                armament: 'Dragon Fang, Beam Glaive, Vulcans, Shenlong Shield.'
-            },
-            {
-                id: 'mg-07', name: 'OZ-00MS Tallgeese I', series: 'TV Version', type: 'Retail', faction: 'OZ',
-                pilot: 'Zechs Marquise', release: '2002', price: '¥3,800', scale: '1/100',
-                lore: 'The grandfather of all modern mobile suits, featuring extreme thruster output that tests the limits of human G-forces.',
-                armament: 'Dober Gun, Beam Saber, Shield.'
-            },
-            {
-                id: 'mg-08', name: 'OZ-00MS2 Tallgeese II', series: 'TV Version', type: 'Retail', faction: 'OZ',
-                pilot: 'Trebizb Khushrenada / Treize', release: '2005', price: '¥4,000', scale: '1/100',
-                lore: 'Upgraded commander unit piloted by Treize Khushrenada featuring distinctive crest and refined thrust vectoring.',
-                armament: 'Dober Gun, Beam Saber, Shield.'
-            },
-            {
-                id: 'mg-09', name: 'OZ-13MS Gundam Epyon (EW)', series: 'Endless Waltz', type: 'Retail', faction: 'White Fang',
-                pilot: 'Zechs Marquise', release: '2011', price: '¥4,800', scale: '1/100',
-                lore: 'Ultimate melee combat suit built without firearms, integrating the Zero System and dragon transformation mode.',
-                armament: 'Beam Sword (direct energy cable), Heat Rod, Mega Cannon (Dragon mode).'
-            },
-            {
-                id: 'mg-10', name: 'XXXG-00W0 Wing Gundam Zero', series: 'TV Version', type: 'Retail', faction: 'Operation Meteor',
-                pilot: 'Heero Yuy / Quatre', release: '2006', price: '¥4,500', scale: '1/100',
-                lore: 'The original TV animation design of Wing Zero with conventional flight binder wings and twin buster rifle.',
-                armament: 'Twin Buster Rifle, Wing Vulcans, Beam Saber.'
-            },
-            {
-                id: 'mg-11', name: 'XXXG-01S2 Altron Gundam', series: 'TV Version', type: 'Retail', faction: 'Operation Meteor',
-                pilot: 'Chang Wufei', release: '2015', price: '¥4,800', scale: '1/100',
-                lore: 'Upgraded version of Shenlong featuring twin dragon arms and twin beam trident.',
-                armament: 'Twin Dragon Hangs, Twin Beam Trident, Dragon Cannons.'
-            },
-            {
-                id: 'mg-12', name: 'XXXG-01H2 Gundam Heavyarms Custom (EW)', series: 'Endless Waltz', type: 'Retail', faction: 'Operation Meteor',
-                pilot: 'Trowa Barton', release: '2013', price: '¥5,000', scale: '1/100',
-                lore: 'Final combat phase featuring double twin beam gatlings and clown mask for psychological warfare.',
-                armament: 'Double Beam Gatlings, Full Body Missile Pods.'
-            },
-            {
-                id: 'mg-13', name: 'XXXG-01D2 Gundam Deathscythe Hell (EW)', series: 'Endless Waltz', type: 'Retail', faction: 'Operation Meteor',
-                pilot: 'Duo Maxwell', release: '2010', price: '¥4,800', scale: '1/100',
-                lore: 'Equipped with active cloaking wing binders that resemble bat wings in defense mode.',
-                armament: 'Twin Beam Scythe, Buster Shield with Beam Blade.'
-            },
-            {
-                id: 'mg-14', name: 'XXXG-01SR2 Gundam Sandrock Custom (EW)', series: 'Endless Waltz', type: 'Retail', faction: 'Operation Meteor',
-                pilot: 'Quatre Raberba Winner', release: '2014', price: '¥4,500', scale: '1/100',
-                lore: 'Customized desert mobile suit equipped with heavy thermal cloak mantle for stealth desert deployment.',
-                armament: 'Heat Shotels, Thermal Cloak Mantle.'
-            },
-            {
-                id: 'mg-15', name: 'OZ-00MS Tallgeese III', series: 'Endless Waltz', type: 'Retail', faction: 'OZ',
-                pilot: 'Zechs Marquise (Preventers)', release: '2018', price: '¥4,800', scale: '1/100',
-                lore: 'Ultimate upgrade commissioned by the Preventers, armed with the devastating Mega Cannon.',
-                armament: 'Mega Cannon, Heat Rod, Vulcans, Shield.'
-            },
-            {
-                id: 'mg-16', name: 'MMS-01 Serpent (EW)', series: 'Endless Waltz', type: 'Retail', faction: 'White Fang',
-                pilot: 'Mars Fleet Pilots', release: '2001', price: '¥3,500', scale: '1/100',
-                lore: 'Mass-produced heavy artillery mobile suit deployed by Barton Foundation forces during the rebellion.',
-                armament: 'Double Gatling Gun, Missile Launchers, Bazooka.'
-            },
-            {
-                id: 'mg-17', name: 'OZ-06MS Leo', series: 'TV Version', type: 'Retail', faction: 'OZ',
-                pilot: 'OZ Grunts', release: '2018', price: '¥2,500', scale: '1/100',
-                lore: 'Ubiquitous mass-production mobile suit utilized by all major factions throughout the After Colony era.',
-                armament: '105mm Rifle, Beam Saber, Shield, Bazooka.'
-            },
-            {
-                id: 'mg-18', name: 'OZ-06MS Leo (Space Type)', series: 'TV Version', type: 'Retail', faction: 'OZ',
-                pilot: 'OZ Space Grunts', release: '2019', price: '¥2,800', scale: '1/100',
-                lore: 'Modified Leo variant equipped with backpack thrusters and high-mobility propellant tanks for space combat.',
-                armament: 'Beam Rifle, Space Thruster Pack, Shield.'
-            },
 
-            // --- PREMIUM P-BANDAI / LIMITED EDITIONS (12 Kits) ---
-            {
-                id: 'mg-p1', name: 'XXXG-01W Wing Gundam Proto Zero (EW)', series: 'Endless Waltz', type: 'P-Bandai', faction: 'Operation Meteor',
-                pilot: 'Heero Yuy', release: '2014', price: '¥5,000', scale: '1/100',
-                lore: 'Prototype design bridging the TV Wing Zero and the Endless Waltz angelic iteration.',
-                armament: 'Twin Buster Rifle, Beam Sabers, Shield.'
-            },
-            {
-                id: 'mg-p2', name: 'XXXG-01H Gundam Heavyarms (Igel Unit)', series: 'Endless Waltz', type: 'P-Bandai', faction: 'Operation Meteor',
-                pilot: 'Trowa Barton', release: '2020', price: '¥6,200', scale: '1/100',
-                lore: 'Equipped with additional missile pods and tracked caterpillar treads on legs for ultimate siege warfare.',
-                armament: 'Igel Missile Units, Leg Tracks, Gatling Guns.'
-            },
-            {
-                id: 'mg-p3', name: 'XXXG-01S Gundam Sandrock (Armadillo Unit)', series: 'Endless Waltz', type: 'P-Bandai', faction: 'Operation Meteor',
-                pilot: 'Quatre Raberba Winner', release: '2021', price: '¥5,800', scale: '1/100',
-                lore: 'Heavy armor booster equipment package designed to protect Sandrock during orbital re-entry and close combat.',
-                armament: 'Armadillo Armor Plates, Heat Shotels.'
-            },
-            {
-                id: 'mg-p4', name: 'XXXG-01SR Gundam Shenlong (Liao Unit)', series: 'Endless Waltz', type: 'P-Bandai', faction: 'Operation Meteor',
-                pilot: 'Chang Wufei', release: '2022', price: '¥4,800', scale: '1/100',
-                lore: 'Special color variation and customized equipment suite celebrating traditional Chinese mecha motifs.',
-                armament: 'Extended Dragon Fang, Beam Glaive.'
-            },
-            {
-                id: 'mg-p5', name: 'OZ-00MS Tallgeese Flugel', series: 'Glory of the Losers', type: 'P-Bandai', faction: 'OZ',
-                pilot: 'Zechs Marquise', release: '2021', price: '¥5,500', scale: '1/100',
-                lore: 'Intermediate Tallgeese prototype fitted with prototype proto-zero winged binders.',
-                armament: 'Dober Gun, Flugel Wings, Heat Saber.'
-            },
-            {
-                id: 'mg-p6', name: 'OZ-13MS Gundam Epyon (Special Coating)', series: 'Endless Waltz', type: 'P-Bandai', faction: 'White Fang',
-                pilot: 'Zechs Marquise', release: '2015', price: '¥8,500', scale: '1/100',
-                lore: 'Collector edition featuring metallic extra-finish red and gold electroplated armor plating.',
-                armament: 'Beam Sword, Heat Rod, Mega Cannon.'
-            },
-            {
-                id: 'mg-p7', name: 'XXXG-01W Wing Gundam Zero (Clear Color)', series: 'Endless Waltz', type: 'P-Bandai', faction: 'Operation Meteor',
-                pilot: 'Heero Yuy', release: '2018', price: '¥4,800', scale: '1/100',
-                lore: 'Exhibition limited clear-armor edition showcasing internal mechanical frame details.',
-                armament: 'Twin Buster Rifle, Angel Wings.'
-            },
-            {
-                id: 'mg-p8', name: 'MMS-01 Serpent (Custom Commander)', series: 'Endless Waltz', type: 'P-Bandai', faction: 'White Fang',
-                pilot: 'Barton Elite Guard', release: '2003', price: '¥3,800', scale: '1/100',
-                lore: 'Commander variant of the Serpent mass-production mobile suit with enhanced communications array.',
-                armament: 'Double Gatling, Heavy Missile Pods.'
-            },
-            {
-                id: 'mg-p9', name: 'OZ-06MS Leo (Flight Unit Option Set)', series: 'TV Version', type: 'P-Bandai', faction: 'OZ',
-                pilot: 'OZ Air Force', release: '2019', price: '¥3,500', scale: '1/100',
-                lore: 'Leo unit bundled with atmospheric jet flight packs for aerial supremacy.',
-                armament: 'Flight Pack, 105mm Rifle, Beam Saber.'
-            },
-            {
-                id: 'mg-p10', name: 'XXXG-01D Gundam Deathscythe (Hell Custom Colors)', series: 'Endless Waltz', type: 'P-Bandai', faction: 'Operation Meteor',
-                pilot: 'Duo Maxwell', release: '2016', price: '¥4,200', scale: '1/100',
-                lore: 'Special rollout color scheme inspired by early concept sketches of the Gundam Deathscythe.',
-                armament: 'Beam Scythe, Buster Shield.'
-            },
-            {
-                id: 'mg-p11', name: 'OZ-00MS2 Tallgeese II (Special Coating)', series: 'TV Version', type: 'P-Bandai', faction: 'OZ',
-                pilot: 'Treize Khushrenada', release: '2017', price: '¥7,500', scale: '1/100',
-                lore: 'Luxurious metallic gloss injection coating highlighting the royal blue and white aesthetic.',
-                armament: 'Dober Gun, Shield, Beam Saber.'
-            },
-            {
-                id: 'mg-p12', name: 'XXXG-01W Wing Gundam (Early Type Ver.Ka)', series: 'Glory of the Losers', type: 'P-Bandai', faction: 'Operation Meteor',
-                pilot: 'Heero Yuy', release: '2023', price: '¥5,200', scale: '1/100',
-                lore: 'Katoki Hajime redesigned version of the original Wing Gundam with refined proportions and waterslide decals.',
-                armament: 'Buster Rifle, Shield, Beam Sabers.'
-            }
-        ];
 
         let activeTypeFilter = 'all';
         let activeFactionFilter = 'all';
+
+        function escapeHtml(value) {
+            return String(value).replace(/[&<>"']/g, character => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+            })[character]);
+        }
 
         // Initialize App on DOM Load
         document.addEventListener('DOMContentLoaded', () => {
@@ -430,6 +268,10 @@
             grid.innerHTML = items.map(item => `
                 <div class="bg-mecha-800 border border-gray-700/80 rounded-2xl p-6 shadow-xl hover:border-cyber-cyan/60 transition-all duration-300 flex flex-col justify-between group">
                     <div>
+                        <div class="relative -mx-6 -mt-6 mb-5 aspect-video overflow-hidden border-b border-gray-700 bg-mecha-900">
+                            <span class="absolute inset-0 grid place-items-center px-4 text-center text-xs font-mono text-gray-600">Image can be added by the archive administrator</span>
+                            <img src="/api/images/${item.id}" alt="${escapeHtml(item.imageAlt)}" class="relative h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" loading="lazy" decoding="async" onerror="this.hidden=true">
+                        </div>
                         <div class="flex items-center justify-between gap-2 mb-4">
                             <span class="px-2.5 py-1 rounded text-xs font-mono font-bold ${
                                 item.type === 'Retail' 
@@ -518,6 +360,10 @@
             document.getElementById('modalRelease').innerText = `${item.release} • ${item.price} (${item.scale})`;
             document.getElementById('modalLore').innerText = item.lore;
             document.getElementById('modalArmament').innerText = item.armament;
+            const modalImage = document.getElementById('modalImage');
+            modalImage.hidden = false;
+            modalImage.src = `/api/images/${item.id}`;
+            modalImage.alt = item.imageAlt;
 
             const modal = document.getElementById('detailModal');
             const container = document.getElementById('modalContainer');

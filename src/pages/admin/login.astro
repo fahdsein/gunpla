@@ -1,0 +1,37 @@
+---
+const failed = Astro.url.searchParams.has("error");
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Gunpla Archive Admin Login</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; background: #0b0f19; color: #f8fafc; }
+    body { min-height: 100vh; margin: 0; display: grid; place-items: center; padding: 1rem; box-sizing: border-box; }
+    main { width: min(100%, 26rem); padding: 2rem; border: 1px solid #374151; border-radius: 1rem; background: #111827; box-shadow: 0 1.5rem 4rem #0008; }
+    h1 { margin: 0 0 .5rem; font-size: 1.6rem; } p { color: #9ca3af; line-height: 1.5; }
+    label { display: block; margin-top: 1rem; font-size: .85rem; font-weight: 700; }
+    input { width: 100%; box-sizing: border-box; margin-top: .4rem; border: 1px solid #4b5563; border-radius: .65rem; background: #0b0f19; color: white; padding: .8rem; }
+    input:focus { outline: 2px solid #06b6d4; outline-offset: 1px; }
+    button { width: 100%; margin-top: 1.25rem; border: 0; border-radius: .65rem; background: #06b6d4; color: #0b0f19; padding: .85rem; font-weight: 800; cursor: pointer; }
+    .error { color: #fecaca; background: #7f1d1d66; border: 1px solid #ef4444; border-radius: .6rem; padding: .7rem; }
+    a { color: #67e8f9; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Archive administrator</h1>
+    <p>Sign in to upload, replace, or remove catalog images.</p>
+    {failed && <p class="error" role="alert">The username or password was not accepted.</p>}
+    <form method="post" action="/api/admin/login">
+      <label>Username<input name="username" autocomplete="username" required></label>
+      <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+      <button type="submit">Sign in</button>
+    </form>
+    <p><a href="/">Return to public catalog</a></p>
+  </main>
+</body>
+</html>

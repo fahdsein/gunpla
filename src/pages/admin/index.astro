@@ -1,0 +1,102 @@
+---
+import catalog from "../../data/gunpla.json";
+import { listImages } from "../../lib/database";
+
+let serviceError = "";
+const records = await listImages().catch((error) => {
+  console.error("Unable to load admin image records", error);
+  serviceError = "The database is unavailable. Check DATABASE_URL and /readyz before uploading.";
+  return [];
+});
+const imageById = new Map(records.map((record) => [record.gunpla_id, record]));
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Manage Gunpla Images</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; background: #0b0f19; color: #f8fafc; }
+    * { box-sizing: border-box; } body { margin: 0; }
+    header { position: sticky; top: 0; z-index: 5; display: flex; justify-content: space-between; gap: 1rem; align-items: center; padding: 1rem max(1rem, calc((100vw - 80rem)/2)); background: #111827ee; border-bottom: 1px solid #374151; backdrop-filter: blur(12px); }
+    header h1 { margin: 0; font-size: 1.2rem; } header div { display: flex; gap: .75rem; align-items: center; }
+    a { color: #67e8f9; } button { cursor: pointer; }
+    main { max-width: 80rem; margin: auto; padding: 2rem 1rem; }
+    .notice { padding: 1rem; border: 1px solid #ef4444; background: #7f1d1d55; border-radius: .75rem; }
+    .intro { color: #9ca3af; line-height: 1.55; max-width: 55rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); gap: 1rem; margin-top: 1.5rem; }
+    article { overflow: hidden; border: 1px solid #374151; border-radius: 1rem; background: #111827; }
+    .preview { position: relative; aspect-ratio: 16/10; background: linear-gradient(135deg, #111827, #1f2937); display: grid; place-items: center; }
+    .preview img { width: 100%; height: 100%; object-fit: cover; } .preview span { position: absolute; color: #6b7280; }
+    .body { padding: 1rem; } h2 { margin: 0 0 .25rem; font-size: 1rem; } .meta { color: #9ca3af; font-size: .78rem; margin: 0 0 1rem; }
+    label { display: block; margin-top: .75rem; font-size: .8rem; font-weight: 700; }
+    input[type="text"], input[type="file"] { width: 100%; margin-top: .35rem; border: 1px solid #4b5563; border-radius: .55rem; padding: .65rem; background: #0b0f19; color: white; }
+    .actions { display: flex; gap: .5rem; margin-top: 1rem; } .actions button { flex: 1; border-radius: .55rem; padding: .7rem; font-weight: 800; }
+    .upload { border: 0; background: #06b6d4; color: #0b0f19; } .delete { border: 1px solid #ef4444; background: transparent; color: #fca5a5; }
+    .status { min-height: 1.3em; margin: .65rem 0 0; color: #a5f3fc; font-size: .8rem; }
+    .logout { border: 1px solid #4b5563; border-radius: .5rem; background: transparent; color: white; padding: .5rem .7rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Gunpla image manager</h1>
+    <div><a href="/">Public catalog</a><form method="post" action="/api/admin/logout"><button class="logout">Sign out</button></form></div>
+  </header>
+  <main>
+    <p class="intro">Only authenticated administrators can change these images. Upload a JPG, PNG, or WebP file up to 5 MB. Files are stored in the attached private object-storage bucket, while NEO DB stores their catalog mapping and alternative text.</p>
+    {serviceError && <p class="notice" role="alert">{serviceError}</p>}
+    <section class="grid" aria-label="Gunpla catalog image editor">
+      {catalog.map((item) => {
+        const current = imageById.get(item.id);
+        return (
+          <article data-card={item.id}>
+            <div class="preview">
+              <span>No uploaded image</span>
+              <img src={`/api/images/${item.id}`} alt={current?.alt_text || ""} hidden={!current} onerror="this.hidden=true" />
+            </div>
+            <form class="body upload-form" data-id={item.id}>
+              <h2>{item.name}</h2>
+              <p class="meta">{item.id} · {item.type} · {item.series}</p>
+              <label>Image file<input name="image" type="file" accept="image/jpeg,image/png,image/webp" required /></label>
+              <label>Alternative text<input name="altText" type="text" maxlength="180" required value={current?.alt_text || `${item.name} Master Grade model kit`} /></label>
+              <div class="actions"><button class="upload" type="submit">Upload / replace</button><button class="delete" type="button">Remove</button></div>
+              <p class="status" role="status">{current ? `Uploaded · ${Math.round(current.size_bytes / 1024)} KB` : ""}</p>
+            </form>
+          </article>
+        );
+      })}
+    </section>
+  </main>
+  <script>
+    document.querySelectorAll<HTMLFormElement>(".upload-form").forEach((form) => {
+      const id = form.dataset.id!;
+      const card = form.closest<HTMLElement>("[data-card]")!;
+      const image = card.querySelector<HTMLImageElement>(".preview img")!;
+      const status = form.querySelector<HTMLElement>(".status")!;
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        status.textContent = "Uploading…";
+        const response = await fetch(`/api/admin/images/${id}`, { method: "POST", body: new FormData(form) });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) { status.textContent = result.error || "Upload failed"; return; }
+        image.src = `/api/images/${id}?v=${Date.now()}`;
+        image.alt = String(new FormData(form).get("altText") || "");
+        image.hidden = false;
+        status.textContent = "Image saved successfully.";
+      });
+      form.querySelector<HTMLButtonElement>(".delete")!.addEventListener("click", async () => {
+        if (!confirm("Remove this image from the catalog and object storage?")) return;
+        status.textContent = "Removing…";
+        const response = await fetch(`/api/admin/images/${id}`, { method: "DELETE" });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) { status.textContent = result.error || "Removal failed"; return; }
+        image.hidden = true;
+        image.removeAttribute("src");
+        status.textContent = "Image removed.";
+      });
+    });
+  </script>
+</body>
+</html>
