@@ -86,7 +86,7 @@ Use `neoapp.env.example` as the checklist. Add each value through the NEO secret
 | `DATABASE_SSL` | Only if required | Set `true` when the DB requires TLS |
 | `DATABASE_SSL_REJECT_UNAUTHORIZED` | No | Keep `true`; use `false` only for a DB certificate that cannot be verified |
 | `S3_ENDPOINT` | Yes | S3-compatible service endpoint, not a console URL |
-| `S3_REGION` | Yes | Storage region; often `us-east-1` for compatible services |
+| `S3_REGION` | Yes | Exact region shown by the attached storage resource (for example `WJV-1`); do not assume `us-east-1` |
 | `S3_BUCKET` | Yes | Existing private bucket name |
 | `S3_PREFIX` | No | Defaults to `gunpla` |
 | `S3_FORCE_PATH_STYLE` | Provider-dependent | Usually `true` for S3-compatible platforms |
@@ -113,6 +113,8 @@ Open these paths on the assigned NEO public domain:
 8. Remove it and verify the catalog returns to its placeholder.
 
 If `/readyz` returns `503`, check the service logs. The most common causes are an incorrect `DATABASE_URL`, using the S3 console URL instead of the API endpoint, a missing bucket, or incorrect path-style configuration.
+
+Both probe responses disable caching. `/readyz` evaluates the database, private S3 bucket, and admin configuration independently, so its response shows which dependency needs attention without exposing credentials.
 
 ## Run locally with Docker
 
