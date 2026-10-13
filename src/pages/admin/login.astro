@@ -24,7 +24,7 @@ const failed = Astro.url.searchParams.has("error");
 <body>
   <main>
     <h1>Archive administrator</h1>
-    <p>Sign in to upload, replace, or remove catalog images.</p>
+    <p>Sign in to manage Gunpla records, JSON imports, tags, notes, and private image galleries.</p>
     {failed && <p class="error" role="alert">The username or password was not accepted.</p>}
     <form method="post" action="/api/admin/login">
       <label>Username<input name="username" autocomplete="username" required></label>

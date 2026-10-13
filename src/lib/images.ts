@@ -1,42 +1,6 @@
 import { maximumImageBytes } from "./config";
-import catalog from "../data/gunpla.json";
-
-const knownGunplaIds = new Set(catalog.map((item) => item.id));
-
-type DetectedImage = { contentType: "image/jpeg" | "image/png" | "image/webp"; extension: "jpg" | "png" | "webp" };
-
-function detectImage(bytes: Uint8Array): DetectedImage | null {
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
-    return { contentType: "image/jpeg", extension: "jpg" };
-  }
-  if (bytes.length >= 8 && bytes.slice(0, 8).every((value, index) => value === [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a][index])) {
-    return { contentType: "image/png", extension: "png" };
-  }
-  if (bytes.length >= 12 && new TextDecoder().decode(bytes.slice(0, 4)) === "RIFF" && new TextDecoder().decode(bytes.slice(8, 12)) === "WEBP") {
-    return { contentType: "image/webp", extension: "webp" };
-  }
-  return null;
-}
-
-export async function validateImage(file: File) {
-  if (file.size <= 0) throw new Error("The selected image is empty");
-  if (file.size > maximumImageBytes()) {
-    throw new Error(`Image exceeds the ${Math.round(maximumImageBytes() / 1024 / 1024)} MB limit`);
-  }
-
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const detected = detectImage(bytes);
-  if (!detected) throw new Error("Only genuine JPG, PNG, or WebP images are accepted");
-  return { ...detected, bytes };
-}
-
-export function cleanAltText(value: unknown) {
-  const alt = String(value || "").trim().replace(/\s+/g, " ");
-  if (!alt) throw new Error("Alternative text is required");
-  if (alt.length > 180) throw new Error("Alternative text must be 180 characters or fewer");
-  return alt;
-}
-
-export function validGunplaId(value: string) {
-  return knownGunplaIds.has(value);
-}
+type DetectedImage={contentType:"image/jpeg"|"image/png"|"image/webp";extension:"jpg"|"png"|"webp"};
+function detectImage(bytes:Uint8Array):DetectedImage|null{if(bytes.length>=3&&bytes[0]===0xff&&bytes[1]===0xd8&&bytes[2]===0xff)return{contentType:"image/jpeg",extension:"jpg"};if(bytes.length>=8&&bytes.slice(0,8).every((value,index)=>value===[0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a][index]))return{contentType:"image/png",extension:"png"};if(bytes.length>=12&&new TextDecoder().decode(bytes.slice(0,4))==="RIFF"&&new TextDecoder().decode(bytes.slice(8,12))==="WEBP")return{contentType:"image/webp",extension:"webp"};return null;}
+export async function validateImage(file:File){if(file.size<=0)throw new Error("The selected image is empty");if(file.size>maximumImageBytes())throw new Error(`Image exceeds the ${Math.round(maximumImageBytes()/1024/1024)} MB limit`);const bytes=new Uint8Array(await file.arrayBuffer());const detected=detectImage(bytes);if(!detected)throw new Error("Only genuine JPG, PNG, or WebP images are accepted");return{...detected,bytes};}
+export function cleanAltText(value:unknown){const alt=String(value||"").trim().replace(/\s+/g," ");if(!alt)throw new Error("Alternative text is required");if(alt.length>180)throw new Error("Alternative text must be 180 characters or fewer");return alt;}
+export function validIdentifier(value:string){return /^[a-zA-Z0-9._-]{1,100}$/.test(value);}

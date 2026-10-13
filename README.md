@@ -1,158 +1,132 @@
-# Gundam Wing MG Gunpla Archive
+# Gunpla Archive
 
-An Astro server-rendered catalog with an administrator-only image manager. Catalog images are stored in private S3-compatible object storage, while PostgreSQL / NEO DB stores the mapping between each Gunpla record and its current image.
+An Astro SSR web service for a personal Gunpla knowledge base. It follows the same durable-content model as the Book Summary app: catalog records live in PostgreSQL / NEO DB and uploaded media lives in private S3-compatible object storage.
 
-## What changed
+## Included functionality
 
-- The project is now a **Web Service**, not a Static Site.
-- `/` is the public searchable catalog.
-- `/admin` is the protected image manager.
-- `/api/images/<gunpla-id>` safely streams private images to public visitors.
-- `/healthz` checks the web process.
-- `/readyz` checks both PostgreSQL and object storage.
-- JPG, PNG, and WebP uploads are accepted up to 5 MB by default.
-- Uploaded bytes are inspected; file extensions alone are not trusted.
-- Replacing an image saves the new image first and removes the previous object afterward.
-- The original 30-item catalog is kept in `src/data/gunpla.json`.
+- Public searchable and filterable catalog at `/`.
+- Full admin CRUD for Gunpla records at `/admin`.
+- Comma-separated tags, builder notes, lore, armament, pilot, faction, release, price, and scale fields.
+- JSON merge import and JSON export. Import updates matching IDs and keeps records omitted from the file.
+- Up to **7 JPG, PNG, or WebP images per Gunpla**. Each file is checked by its real byte signature and is limited to 5 MB by default.
+- Private S3 bucket support. Visitors see images through `/api/images/<image-id>`; credentials never reach the browser.
+- Signed HTTP-only admin sessions, same-origin mutation checks, liveness at `/healthz`, and dependency readiness at `/readyz`.
+- Automatic migration of the original 30 records from `src/data/gunpla.json` and legacy single-image mappings into gallery slot 1.
 
-The browser never receives S3 credentials. Uploads pass through the web service, so NEO object storage does not need browser CORS configuration and the bucket can remain private.
+Images are not embedded in JSON exports. Importing or editing a record preserves its existing gallery. Deleting a record removes its database gallery mapping and attempts to delete all related S3 objects.
 
-## Beginner-friendly NEO App deployment
+## JSON import format
 
-### 1. Prepare the repository
+Import either a direct array or an object containing a `gunpla` array:
 
-Push this folder as the root of its own Git repository. `Dockerfile`, `package.json`, and `src` should be visible at the repository root.
+```json
+{
+  "schemaVersion": 2,
+  "gunpla": [
+    {
+      "id": "wing-zero-ew",
+      "name": "Wing Gundam Zero EW",
+      "series": "Endless Waltz",
+      "type": "Retail",
+      "faction": "Operation Meteor",
+      "pilot": "Heero Yuy",
+      "release": "2004",
+      "price": "¥3,800",
+      "scale": "1/100 MG",
+      "lore": "Short catalog explanation.",
+      "armament": "Twin Buster Rifle, beam sabers",
+      "tags": ["Wing", "EW", "Gundam"],
+      "notes": "Personal build notes."
+    }
+  ]
+}
+```
 
-Do not commit a real `.env` file, database URL, S3 secret, password hash, or session secret.
+When `id` matches an existing record it is updated. A new or omitted ID creates a new record. Up to 500 records are accepted per import.
 
-### 2. Create the database
+## Deploy on NEO App
 
-1. Open the intended NEO project.
-2. Create a **NEO DB / PostgreSQL** resource.
-3. Wait until it is ready.
-4. Record or attach its PostgreSQL connection value as `DATABASE_URL`.
+### 1. Prepare NEO resources
 
-The application creates only the `gunpla_images` table when `DATABASE_AUTO_MIGRATE=true`. The operation is idempotent. The equivalent SQL is available in `db/schema.sql`.
+In one NEO App project and environment:
 
-### 3. Prepare object storage
+1. Create a **NEO DB / PostgreSQL** resource.
+2. Create or attach S3-compatible object storage and make a private bucket such as `gunpla-assets`.
+3. Give the application credentials access to `HeadBucket`, `GetObject`, `PutObject`, and `DeleteObject` for that bucket, preferably restricted to the `gunpla/` prefix.
 
-1. Create or select an S3-compatible Object Storage resource.
-2. Create a private bucket, for example `gunpla-assets`.
-3. Record its endpoint, region, bucket name, access key, and secret key.
-4. The credentials require `GetObject`, `PutObject`, `DeleteObject`, and bucket-read/head access for the selected bucket. Restrict them to the `gunpla/` prefix when the provider supports prefix policies.
+No public-read bucket policy or filesystem mount is needed.
 
-The application deliberately does not create or make a bucket public.
-
-### 4. Generate admin secrets locally
-
-Install dependencies, then generate the password hash:
+### 2. Generate admin secrets locally
 
 ```powershell
 npm ci
-npm run hash-password -- "replace-this-with-your-long-admin-password"
-```
-
-Copy the complete output beginning with `scrypt$`. That output becomes `ADMIN_PASSWORD_HASH`; the plain password is what you enter on `/admin/login`.
-
-Generate a session secret in PowerShell:
-
-```powershell
+npm run hash-password -- "choose-a-long-admin-password"
 [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
 ```
 
-Save that output as `SESSION_SECRET`. It must contain at least 32 characters.
+Use the `scrypt$...` output as `ADMIN_PASSWORD_HASH`. Use the random Base64 value as `SESSION_SECRET`. Keep the plain password for signing in; do not store it in Git.
 
-### 5. Create the Web Service
+### 3. Create the web service
 
-1. In the same NEO project, choose to create a **Web Service**.
-2. Select the Git repository and branch.
-3. Select **Build File / Dockerfile** as the build method.
-4. Use `Dockerfile` at the repository root.
-5. Attach the NEO DB and ensure its value is available as `DATABASE_URL`.
-6. Attach the object-storage resource if NEO supports attachment, then verify the generated variable names.
-7. Configure service/container port `3000` if NEO does not discover it from the Dockerfile.
-8. Enable public access.
-9. Use `/readyz` as the health-check path. `/healthz` is only the process-liveness check.
-10. Start with one replica, deploy, and wait for readiness.
+1. Choose **Web Service**, connect this repository, and select its branch.
+2. Select **Dockerfile / Build File** and use `Dockerfile` in the repository root.
+3. Attach the NEO DB and object-storage resources.
+4. Use container port `3000` only if NEO does not detect it automatically. The app listens on `0.0.0.0`.
+5. Enable public networking.
+6. Configure `/readyz` as the readiness/health path. `/healthz` is the lightweight liveness path.
+7. Start with one replica and approve the deployment.
 
-### 6. Add environment variables
+### 4. Configure variables
 
-Use `neoapp.env.example` as the checklist. Add each value through the NEO secret/environment-variable form:
+Copy values from `neoapp.env.example` into the service variable/secret form:
 
-| Variable | Required | Purpose |
+| Variable | Required | Meaning |
 | --- | --- | --- |
-| `DATABASE_URL` | Yes | Attached PostgreSQL connection URL |
-| `DATABASE_AUTO_MIGRATE` | Yes initially | Set `true` to create the image table |
-| `DATABASE_SSL` | Only if required | Set `true` when the DB requires TLS |
-| `DATABASE_SSL_REJECT_UNAUTHORIZED` | No | Keep `true`; use `false` only for a DB certificate that cannot be verified |
-| `S3_ENDPOINT` | Yes | S3-compatible service endpoint, not a console URL |
-| `S3_REGION` | Yes | Exact region shown by the attached storage resource (for example `WJV-1`); do not assume `us-east-1` |
-| `S3_BUCKET` | Yes | Existing private bucket name |
-| `S3_PREFIX` | No | Defaults to `gunpla` |
-| `S3_FORCE_PATH_STYLE` | Provider-dependent | Usually `true` for S3-compatible platforms |
-| `S3_ACCESS_KEY_ID` | Yes | Storage access key; `S3_ACCESS_KEY` and `AWS_ACCESS_KEY_ID` are also accepted |
-| `S3_SECRET_ACCESS_KEY` | Yes | Storage secret; `S3_SECRET_KEY` and `AWS_SECRET_ACCESS_KEY` are also accepted |
-| `ADMIN_USERNAME` | Yes | Admin login name; defaults to `admin` |
-| `ADMIN_PASSWORD_HASH` | Yes | Output from the password-hash command |
+| `DATABASE_URL` | Yes | PostgreSQL connection URL from the attached NEO DB |
+| `DATABASE_AUTO_MIGRATE` | Yes initially | `true` creates/updates the app tables and seeds the original catalog |
+| `DATABASE_SSL` | Provider-dependent | Use `true` when the database requires TLS |
+| `S3_ENDPOINT` | Yes | Storage API endpoint, not its browser console URL |
+| `S3_REGION` | Yes | Exact storage region shown by NEO |
+| `S3_BUCKET` | Yes | Existing private bucket |
+| `S3_FORCE_PATH_STYLE` | Provider-dependent | Commonly `true` for S3-compatible storage |
+| `S3_ACCESS_KEY_ID` | Yes | Bucket-scoped access key |
+| `S3_SECRET_ACCESS_KEY` | Yes | Bucket-scoped secret key |
+| `ADMIN_USERNAME` | Yes | Admin sign-in name; default is `admin` |
+| `ADMIN_PASSWORD_HASH` | Yes | Generated `scrypt$...` hash |
 | `SESSION_SECRET` | Yes | Random value of at least 32 characters |
-| `MAX_IMAGE_BYTES` | No | Defaults to `5242880` (5 MB) |
+| `MAX_IMAGE_BYTES` | No | Per-image limit; default `5242880` (5 MB) |
 
-Do not manually set `PORT` when NEO injects it automatically. The container defaults to port `3000` and listens on `0.0.0.0`.
+NEO normally injects `PORT`; do not create it manually unless the platform requires it. Never commit real database, S3, or admin secrets.
 
-### 7. Verify the deployment
+### 5. Verify after deployment
 
-Open these paths on the assigned NEO public domain:
+1. Open `/healthz`; expect HTTP 200 and `status: ok`.
+2. Open `/readyz`; expect database, storage, and admin to report `ready`.
+3. Open `/`; the original seeded catalog should appear.
+4. Open `/admin`, sign in, create or edit one record, and refresh `/` to confirm it persists.
+5. Upload 2–7 images, confirm the public card shows the first image, and open the detail gallery.
+6. Try an eighth image; the UI and server must reject it.
+7. Export JSON, edit a record in the file, import it, and confirm other records and galleries remain.
 
-1. `/healthz` should return `status: ok`.
-2. `/readyz` should return `database: ready`, `storage: ready`, and `admin: ready`.
-3. `/` should show the public catalog and image placeholders.
-4. `/admin` should redirect to `/admin/login`.
-5. Sign in and upload a JPG, PNG, or WebP image for one record.
-6. Refresh `/` and verify the image appears on its card and detail modal.
-7. Replace the image and verify the public image changes.
-8. Remove it and verify the catalog returns to its placeholder.
-
-If `/readyz` returns `503`, check the service logs. The most common causes are an incorrect `DATABASE_URL`, using the S3 console URL instead of the API endpoint, a missing bucket, or incorrect path-style configuration.
-
-Both probe responses disable caching. `/readyz` evaluates the database, private S3 bucket, and admin configuration independently, so its response shows which dependency needs attention without exposing credentials.
+If `/readyz` returns 503, inspect service logs. Common causes are an incorrect `DATABASE_URL`, an S3 console URL used as `S3_ENDPOINT`, a missing bucket, or incorrect path-style/region settings.
 
 ## Run locally with Docker
 
-1. Copy `.env.example` to `.env`.
-2. Replace every `change-this` or `replace-with` value.
-3. Generate `ADMIN_PASSWORD_HASH` using the command above.
-4. Start the complete app, PostgreSQL, and MinIO stack:
-
-Keep the generated hash inside single quotes in the local `.env` file because a scrypt hash contains `$` characters. In the NEO environment-variable form, paste the raw hash without quotes.
+1. Copy `.env.example` to `.env` and replace every placeholder.
+2. Keep `ADMIN_PASSWORD_HASH` inside single quotes in `.env` because it contains `$` characters.
+3. Start PostgreSQL, MinIO, bucket initialization, and the app:
 
 ```powershell
 docker compose up --build
 ```
 
-Then open:
+Open <http://localhost:3000> and <http://localhost:3000/admin>. The MinIO console is at <http://localhost:9001>. Stop with `docker compose down`; add `-v` only when you intentionally want to erase local database and storage volumes.
 
-- Public catalog: <http://localhost:3000>
-- Admin login: <http://localhost:3000/admin>
-- MinIO console: <http://localhost:9001>
+## Security and operational notes
 
-Stop it with `docker compose down`. Add `-v` only when you intentionally want to delete the local database and stored test images.
-
-## Development without Docker
-
-Provide a reachable PostgreSQL database and S3-compatible bucket, export the variables from `.env.example`, and run:
-
-```powershell
-npm ci
-npm run dev
-```
-
-Astro does not automatically load arbitrary production secrets from NEO; configure them in the NEO service settings.
-
-## Security notes
-
-- Never store S3 credentials or the admin password in browser-side JavaScript.
-- Keep the bucket private; public reads go through `/api/images/<id>`.
-- Admin sessions are signed, HTTP-only, same-site cookies and are marked secure in production.
-- Upload, replace, and delete routes validate the session and request origin.
-- SVG and arbitrary files are rejected.
-- Use images you have permission to publish; Gundam artwork and product photography may be copyrighted.
+- Keep S3 private. Public-read permissions are unnecessary because the app streams authorized objects.
+- Rotate S3 and admin secrets through NEO settings, never source control.
+- SVG and arbitrary uploads are rejected to reduce script/content-type risks.
+- All admin pages and mutation APIs require a signed session; write calls also validate the request origin.
+- Use imagery you have permission to publish.
+- `db/schema.sql` documents the schema. Runtime migration is idempotent when `DATABASE_AUTO_MIGRATE=true`.

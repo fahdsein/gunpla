@@ -1,102 +1,45 @@
 ---
-import catalog from "../../data/gunpla.json";
-import { listImages } from "../../lib/database";
+import "../../styles/app.css";
+import { listGunpla, listImages } from "../../lib/database";
 
 let serviceError = "";
-const records = await listImages().catch((error) => {
-  console.error("Unable to load admin image records", error);
-  serviceError = "The database is unavailable. Check DATABASE_URL and /readyz before uploading.";
-  return [];
-});
-const imageById = new Map(records.map((record) => [record.gunpla_id, record]));
+const records = await listGunpla().catch((error) => { console.error(error); serviceError = "NEO DB is unavailable. Check DATABASE_URL and /readyz."; return []; });
+const images = await listImages().catch((error) => { console.error(error); serviceError ||= "The image index is unavailable. Check NEO DB and S3 settings."; return []; });
 ---
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="robots" content="noindex, nofollow">
-  <title>Manage Gunpla Images</title>
-  <style>
-    :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; background: #0b0f19; color: #f8fafc; }
-    * { box-sizing: border-box; } body { margin: 0; }
-    header { position: sticky; top: 0; z-index: 5; display: flex; justify-content: space-between; gap: 1rem; align-items: center; padding: 1rem max(1rem, calc((100vw - 80rem)/2)); background: #111827ee; border-bottom: 1px solid #374151; backdrop-filter: blur(12px); }
-    header h1 { margin: 0; font-size: 1.2rem; } header div { display: flex; gap: .75rem; align-items: center; }
-    a { color: #67e8f9; } button { cursor: pointer; }
-    main { max-width: 80rem; margin: auto; padding: 2rem 1rem; }
-    .notice { padding: 1rem; border: 1px solid #ef4444; background: #7f1d1d55; border-radius: .75rem; }
-    .intro { color: #9ca3af; line-height: 1.55; max-width: 55rem; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); gap: 1rem; margin-top: 1.5rem; }
-    article { overflow: hidden; border: 1px solid #374151; border-radius: 1rem; background: #111827; }
-    .preview { position: relative; aspect-ratio: 16/10; background: linear-gradient(135deg, #111827, #1f2937); display: grid; place-items: center; }
-    .preview img { width: 100%; height: 100%; object-fit: cover; } .preview span { position: absolute; color: #6b7280; }
-    .body { padding: 1rem; } h2 { margin: 0 0 .25rem; font-size: 1rem; } .meta { color: #9ca3af; font-size: .78rem; margin: 0 0 1rem; }
-    label { display: block; margin-top: .75rem; font-size: .8rem; font-weight: 700; }
-    input[type="text"], input[type="file"] { width: 100%; margin-top: .35rem; border: 1px solid #4b5563; border-radius: .55rem; padding: .65rem; background: #0b0f19; color: white; }
-    .actions { display: flex; gap: .5rem; margin-top: 1rem; } .actions button { flex: 1; border-radius: .55rem; padding: .7rem; font-weight: 800; }
-    .upload { border: 0; background: #06b6d4; color: #0b0f19; } .delete { border: 1px solid #ef4444; background: transparent; color: #fca5a5; }
-    .status { min-height: 1.3em; margin: .65rem 0 0; color: #a5f3fc; font-size: .8rem; }
-    .logout { border: 1px solid #4b5563; border-radius: .5rem; background: transparent; color: white; padding: .5rem .7rem; }
-  </style>
-</head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Gunpla Archive Admin</title></head>
 <body>
-  <header>
-    <h1>Gunpla image manager</h1>
-    <div><a href="/">Public catalog</a><form method="post" action="/api/admin/logout"><button class="logout">Sign out</button></form></div>
-  </header>
-  <main>
-    <p class="intro">Only authenticated administrators can change these images. Upload a JPG, PNG, or WebP file up to 5 MB. Files are stored in the attached private object-storage bucket, while NEO DB stores their catalog mapping and alternative text.</p>
+  <header class="topbar"><div class="shell topbar-inner"><a class="brand" href="/admin"><span class="brand-mark">MG</span><span><span class="eyebrow">Secure workspace</span><strong>Archive Admin</strong></span></a><nav class="nav-actions"><a class="button ghost optional" href="/">Public catalog</a><form method="post" action="/api/admin/logout"><button class="button ghost" type="submit">Sign out</button></form></nav></div></header>
+  <main class="shell admin-main">
+    <div class="admin-heading"><div><p class="eyebrow">Content management</p><h1>Gunpla records and galleries</h1><p>Create, edit, import, export, or delete catalog records. Each Gunpla supports up to seven private S3 images.</p></div><div class="admin-tools"><button class="button" id="importButton" type="button">Import JSON</button><button class="button" id="exportButton" type="button">Export JSON</button><button class="button primary" id="addButton" type="button">Add Gunpla</button><input class="sr-only" id="importFile" type="file" accept="application/json,.json"></div></div>
     {serviceError && <p class="notice" role="alert">{serviceError}</p>}
-    <section class="grid" aria-label="Gunpla catalog image editor">
-      {catalog.map((item) => {
-        const current = imageById.get(item.id);
-        return (
-          <article data-card={item.id}>
-            <div class="preview">
-              <span>No uploaded image</span>
-              <img src={`/api/images/${item.id}`} alt={current?.alt_text || ""} hidden={!current} onerror="this.hidden=true" />
-            </div>
-            <form class="body upload-form" data-id={item.id}>
-              <h2>{item.name}</h2>
-              <p class="meta">{item.id} · {item.type} · {item.series}</p>
-              <label>Image file<input name="image" type="file" accept="image/jpeg,image/png,image/webp" required /></label>
-              <label>Alternative text<input name="altText" type="text" maxlength="180" required value={current?.alt_text || `${item.name} Master Grade model kit`} /></label>
-              <div class="actions"><button class="upload" type="submit">Upload / replace</button><button class="delete" type="button">Remove</button></div>
-              <p class="status" role="status">{current ? `Uploaded · ${Math.round(current.size_bytes / 1024)} KB` : ""}</p>
-            </form>
-          </article>
-        );
-      })}
-    </section>
+    <section class="panel toolbar"><div class="field grow"><label for="adminSearch">Find a record</label><input class="input" id="adminSearch" type="search" placeholder="Name, pilot, series, ID…"></div><div><p class="eyebrow" id="adminCount"></p></div></section>
+    <p class="status" id="pageStatus" role="status"></p><section class="record-list" id="recordList" aria-label="Gunpla records"></section>
   </main>
-  <script>
-    document.querySelectorAll<HTMLFormElement>(".upload-form").forEach((form) => {
-      const id = form.dataset.id!;
-      const card = form.closest<HTMLElement>("[data-card]")!;
-      const image = card.querySelector<HTMLImageElement>(".preview img")!;
-      const status = form.querySelector<HTMLElement>(".status")!;
-      form.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        status.textContent = "Uploading…";
-        const response = await fetch(`/api/admin/images/${id}`, { method: "POST", body: new FormData(form) });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) { status.textContent = result.error || "Upload failed"; return; }
-        image.src = `/api/images/${id}?v=${Date.now()}`;
-        image.alt = String(new FormData(form).get("altText") || "");
-        image.hidden = false;
-        status.textContent = "Image saved successfully.";
-      });
-      form.querySelector<HTMLButtonElement>(".delete")!.addEventListener("click", async () => {
-        if (!confirm("Remove this image from the catalog and object storage?")) return;
-        status.textContent = "Removing…";
-        const response = await fetch(`/api/admin/images/${id}`, { method: "DELETE" });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) { status.textContent = result.error || "Removal failed"; return; }
-        image.hidden = true;
-        image.removeAttribute("src");
-        status.textContent = "Image removed.";
-      });
-    });
+
+  <dialog id="recordDialog"><form id="recordForm"><div class="dialog-head"><div><p class="eyebrow" id="formMode">New record</p><h2 id="formTitle">Add Gunpla</h2></div><button class="close" type="button" data-close="recordDialog" aria-label="Close">×</button></div><div class="dialog-body"><div class="form-grid">
+    <input name="id" type="hidden"><div class="field full"><label for="name">Name</label><input class="input" id="name" name="name" maxlength="140" required></div>
+    <div class="field"><label for="series">Series</label><input class="input" id="series" name="series" maxlength="100" required></div><div class="field"><label for="type">Release type</label><input class="input" id="type" name="type" maxlength="60" required></div>
+    <div class="field"><label for="faction">Faction</label><input class="input" id="faction" name="faction" maxlength="100" required></div><div class="field"><label for="pilot">Pilot</label><input class="input" id="pilot" name="pilot" maxlength="140" required></div>
+    <div class="field"><label for="release">Release year</label><input class="input" id="release" name="release" maxlength="20" required></div><div class="field"><label for="price">Price</label><input class="input" id="price" name="price" maxlength="80" required></div>
+    <div class="field"><label for="scale">Scale</label><input class="input" id="scale" name="scale" maxlength="30" required></div><div class="field"><label for="tags">Tags</label><input class="input" id="tags" name="tags" maxlength="500" placeholder="Wing, Custom, P-Bandai"></div>
+    <div class="field full"><label for="lore">Lore</label><textarea class="textarea" id="lore" name="lore" maxlength="4000" required></textarea></div><div class="field full"><label for="armament">Armament</label><textarea class="textarea" id="armament" name="armament" maxlength="2000" required></textarea></div><div class="field full"><label for="notes">Builder notes</label><textarea class="textarea" id="notes" name="notes" maxlength="4000"></textarea></div>
+  </div><p class="status" id="formStatus" role="status"></p></div><div class="dialog-actions"><button class="button ghost" type="button" data-close="recordDialog">Cancel</button><button class="button primary" type="submit">Save record</button></div></form></dialog>
+
+  <dialog id="galleryDialog"><div class="dialog-head"><div><p class="eyebrow">Private S3 gallery</p><h2 id="galleryTitle"></h2></div><button class="close" type="button" data-close="galleryDialog" aria-label="Close">×</button></div><div class="dialog-body"><p id="galleryLimit" class="eyebrow"></p><section class="admin-gallery" id="adminGallery"></section><form class="upload-box" id="galleryForm"><div class="form-grid"><div class="field full"><label for="images">Images (JPG, PNG, or WebP)</label><input class="input" id="images" name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple required></div><div class="field full"><label for="altText">Alternative text</label><input class="input" id="altText" name="altText" maxlength="180" required placeholder="Describe what is visible for accessibility"></div></div><p class="status" id="galleryStatus" role="status"></p><button class="button primary" id="uploadButton" type="submit">Upload selected images</button></form></div></dialog>
+
+  <script is:inline define:vars={{ records, images }}>
+    const esc=(v)=>String(v??"").replace(/[&<>"']/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"})[c]);
+    const list=document.querySelector("#recordList"),search=document.querySelector("#adminSearch"),count=document.querySelector("#adminCount"),pageStatus=document.querySelector("#pageStatus"),recordDialog=document.querySelector("#recordDialog"),recordForm=document.querySelector("#recordForm"),galleryDialog=document.querySelector("#galleryDialog"),galleryForm=document.querySelector("#galleryForm");let selectedId="";
+    const imageCount=(id)=>images.filter((image)=>image.gunpla_id===id).length;
+    function render(){const query=search.value.toLowerCase().trim();const filtered=records.filter((item)=>[item.name,item.pilot,item.series,item.faction,item.id,...item.tags].join(" ").toLowerCase().includes(query));count.textContent=`${filtered.length} of ${records.length} records`;list.innerHTML=filtered.map((item)=>`<article class="panel record"><div><h2>${esc(item.name)}</h2><p>${esc(item.id)} · ${esc(item.type)} · ${esc(item.series)} · ${imageCount(item.id)}/7 images</p></div><div class="record-actions"><button class="button" type="button" data-action="gallery" data-id="${esc(item.id)}">Images</button><button class="button" type="button" data-action="edit" data-id="${esc(item.id)}">Edit</button><button class="button danger" type="button" data-action="delete" data-id="${esc(item.id)}">Delete</button></div></article>`).join("");if(!filtered.length)list.innerHTML='<div class="panel empty">No matching records.</div>'}
+    function showForm(item){recordForm.reset();document.querySelector("#formMode").textContent=item?"Edit record":"New record";document.querySelector("#formTitle").textContent=item?item.name:"Add Gunpla";for(const name of ["id","name","series","type","faction","pilot","release","price","scale","lore","armament","notes"]){recordForm.elements[name].value=item?.[name]||""}recordForm.elements.tags.value=item?.tags?.join(", ")||"";document.querySelector("#formStatus").textContent="";recordDialog.showModal()}
+    function showGallery(id){selectedId=id;const item=records.find((record)=>record.id===id),current=images.filter((image)=>image.gunpla_id===id).sort((a,b)=>a.position-b.position);document.querySelector("#galleryTitle").textContent=item?.name||id;document.querySelector("#galleryLimit").textContent=`${current.length} of 7 image slots used`;document.querySelector("#adminGallery").innerHTML=current.length?current.map((image)=>`<article class="admin-image"><img src="/api/images/${encodeURIComponent(image.image_id)}" alt="${esc(image.alt_text)}"><div><p>${esc(image.alt_text)} · ${Math.round(image.size_bytes/1024)} KB</p><button class="button danger" type="button" data-remove-image="${esc(image.image_id)}">Remove</button></div></article>`).join(""):'<div class="empty">No images uploaded yet.</div>';galleryForm.reset();document.querySelector("#galleryStatus").textContent="";document.querySelector("#uploadButton").disabled=current.length>=7;document.querySelector("#images").disabled=current.length>=7;galleryDialog.showModal()}
+    recordForm.addEventListener("submit",async(event)=>{event.preventDefault();const status=document.querySelector("#formStatus"),data=Object.fromEntries(new FormData(recordForm));data.tags=String(data.tags||"").split(/[,;\n]/).map((tag)=>tag.trim()).filter(Boolean);const id=String(data.id||"");delete data.id;status.textContent="Saving…";const response=await fetch(id?`/api/admin/gunpla/${encodeURIComponent(id)}`:"/api/admin/gunpla",{method:id?"PUT":"POST",headers:{"content-type":"application/json"},body:JSON.stringify(data)});const result=await response.json().catch(()=>({}));if(!response.ok){status.textContent=result.error||"Save failed";return}location.reload()});
+    galleryForm.addEventListener("submit",async(event)=>{event.preventDefault();const status=document.querySelector("#galleryStatus"),files=document.querySelector("#images").files,current=imageCount(selectedId);if(!files.length)return;if(current+files.length>7){status.textContent=`Only ${7-current} slot(s) remain.`;return}status.textContent="Uploading…";const response=await fetch(`/api/admin/gunpla/${encodeURIComponent(selectedId)}/images`,{method:"POST",body:new FormData(galleryForm)});const result=await response.json().catch(()=>({}));if(!response.ok){status.textContent=result.error||"Upload failed";return}location.reload()});
+    list.addEventListener("click",async(event)=>{const button=event.target.closest("[data-action]");if(!button)return;const item=records.find((record)=>record.id===button.dataset.id);if(button.dataset.action==="edit")showForm(item);if(button.dataset.action==="gallery")showGallery(button.dataset.id);if(button.dataset.action==="delete"&&item&&confirm(`Delete ${item.name}, its database record, and all ${imageCount(item.id)} stored image(s)?`)){pageStatus.textContent="Deleting…";const response=await fetch(`/api/admin/gunpla/${encodeURIComponent(item.id)}`,{method:"DELETE"});const result=await response.json().catch(()=>({}));if(!response.ok){pageStatus.textContent=result.error||"Delete failed";return}location.reload()}});
+    document.querySelector("#adminGallery").addEventListener("click",async(event)=>{const button=event.target.closest("[data-remove-image]");if(!button||!confirm("Remove this image from the gallery and S3?"))return;document.querySelector("#galleryStatus").textContent="Removing…";const response=await fetch(`/api/admin/images/${encodeURIComponent(button.dataset.removeImage)}`,{method:"DELETE"});const result=await response.json().catch(()=>({}));if(!response.ok){document.querySelector("#galleryStatus").textContent=result.error||"Removal failed";return}location.reload()});
+    document.querySelector("#addButton").addEventListener("click",()=>showForm(null));document.querySelector("#exportButton").addEventListener("click",()=>{const payload={schemaVersion:2,exportedAt:new Date().toISOString(),gunpla:records.map(({created_at,updated_at,...record})=>record)};const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:"application/json"}));const anchor=document.createElement("a");anchor.href=url;anchor.download=`gunpla-archive-${new Date().toISOString().slice(0,10)}.json`;anchor.click();URL.revokeObjectURL(url)});document.querySelector("#importButton").addEventListener("click",()=>document.querySelector("#importFile").click());document.querySelector("#importFile").addEventListener("change",async(event)=>{const file=event.target.files[0];if(!file)return;if(!confirm("Merge this JSON file into the archive? Existing matching IDs will be updated; other records and galleries stay intact."))return;pageStatus.textContent="Importing…";try{const payload=JSON.parse(await file.text());const response=await fetch("/api/admin/gunpla/import",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload)});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.error||"Import failed");location.reload()}catch(error){pageStatus.textContent=error.message}});document.querySelectorAll("[data-close]").forEach((button)=>button.addEventListener("click",()=>document.querySelector(`#${button.dataset.close}`).close()));search.addEventListener("input",render);render();
   </script>
-</body>
-</html>
+</body></html>
