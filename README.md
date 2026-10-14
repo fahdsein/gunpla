@@ -46,6 +46,14 @@ When `id` matches an existing record it is updated. A new or omitted ID creates 
 
 ## Deploy on NEO App
 
+The repository supports three source-build paths:
+
+- `Dockerfile` — recommended when you want the most deterministic build.
+- `nixpacks.toml` — Nixpacks build plan.
+- `project.toml` plus the package scripts — Cloud Native Buildpacks with a Paketo-compatible Node.js builder.
+
+See [BUILDING.md](BUILDING.md) for the exact builder behavior and local verification commands. Builder choice does not replace the NEO DB, private S3, runtime-variable, health-check, or networking setup below.
+
 ### 1. Prepare NEO resources
 
 In one NEO App project and environment:

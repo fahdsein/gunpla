@@ -1,0 +1,16 @@
+# Nixpacks merges this file with its detected Node.js build plan.
+providers = ["node"]
+
+[variables]
+NODE_ENV = "production"
+NPM_CONFIG_PRODUCTION = "false"
+HOST = "0.0.0.0"
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "npm run start"
